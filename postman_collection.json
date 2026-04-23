@@ -1,0 +1,111 @@
+{
+  "info": {
+    "name": "api_server_sample",
+    "description": "GitHub-proxy API with JWT auth. POST /login first — the test script captures the token into the `token` collection variable so every other request picks it up automatically.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080" },
+    { "key": "username", "value": "admin" },
+    { "key": "password", "value": "admin" },
+    { "key": "token", "value": "" },
+    { "key": "repoName", "value": "example-repo" }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }]
+  },
+  "item": [
+    {
+      "name": "Login",
+      "request": {
+        "auth": { "type": "noauth" },
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": { "raw": "{{baseUrl}}/login", "host": ["{{baseUrl}}"], "path": ["login"] },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"{{username}}\",\n  \"password\": \"{{password}}\"\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('login succeeded', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "const body = pm.response.json();",
+              "if (body && body.token) {",
+              "  pm.collectionVariables.set('token', body.token);",
+              "  console.log('JWT captured into collection variable `token`');",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "List repos",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": { "raw": "{{baseUrl}}/repos", "host": ["{{baseUrl}}"], "path": ["repos"] }
+      }
+    },
+    {
+      "name": "Create repo",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": { "raw": "{{baseUrl}}/repos", "host": ["{{baseUrl}}"], "path": ["repos"] },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"{{repoName}}\",\n  \"description\": \"created via postman\",\n  \"private\": false\n}"
+        }
+      }
+    },
+    {
+      "name": "Get repo",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/repos/{{repoName}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["repos", "{{repoName}}"]
+        }
+      }
+    },
+    {
+      "name": "Update repo",
+      "request": {
+        "method": "PATCH",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": {
+          "raw": "{{baseUrl}}/repos/{{repoName}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["repos", "{{repoName}}"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"description\": \"updated via postman\",\n  \"private\": true\n}"
+        }
+      }
+    },
+    {
+      "name": "Delete repo",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/repos/{{repoName}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["repos", "{{repoName}}"]
+        }
+      }
+    }
+  ]
+}
