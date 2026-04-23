@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+# Warns if routes declared in main.go don't match paths in docs/openapi.yaml.
+# Non-blocking: prints a warning but never rejects the push.
+
+set -uo pipefail
+
+cd "$(git rev-parse --show-toplevel)"
+
+MAIN_GO="main.go"
+OPENAPI="docs/openapi.yaml"
+
+if [[ ! -f "$MAIN_GO" || ! -f "$OPENAPI" ]]; then
+  exit 0
+fi
+
+# Extract "METHOD /path" pairs from `mux.HandleFunc("METHOD /path", ...)`.
+main_routes=$(grep -Eo 'mux\.HandleFunc\("[A-Z]+ /[^"]+' "$MAIN_GO" \
+  | sed 's/mux\.HandleFunc("//' \
+  | sort -u)
+
+# Walk docs/openapi.yaml, pulling out each `METHOD path` combination
+# declared under the top-level `paths:` mapping.
+spec_routes=$(awk '
+  /^paths:/                                          { in_paths=1; next }
+  in_paths && /^[A-Za-z]/                            { in_paths=0 }
+  in_paths && /^  \/[^ ]*:$/                         { path=$1; sub(/:$/, "", path); next }
+  in_paths && /^    (get|post|put|patch|delete|head|options|trace):/ {
+    m=$1; sub(/:$/, "", m)
+    printf "%s %s\n", toupper(m), path
+  }
+' "$OPENAPI" | sort -u)
+
+missing_in_spec=$(comm -23 <(echo "$main_routes") <(echo "$spec_routes"))
+missing_in_code=$(comm -13 <(echo "$main_routes") <(echo "$spec_routes"))
+
+if [[ -n "$missing_in_spec" || -n "$missing_in_code" ]]; then
+  echo
+  echo "pre-push: main.go and docs/openapi.yaml look out of sync."
+  if [[ -n "$missing_in_spec" ]]; then
+    echo
+    echo "  Routes in main.go not documented in openapi.yaml:"
+    echo "$missing_in_spec" | sed 's/^/    /'
+  fi
+  if [[ -n "$missing_in_code" ]]; then
+    echo
+    echo "  Paths in openapi.yaml with no matching route in main.go:"
+    echo "$missing_in_code" | sed 's/^/    /'
+  fi
+  echo
+  echo "  Push continuing. Update docs/openapi.yaml to silence this warning."
+  echo
+fi
+
+exit 0
