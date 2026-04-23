@@ -1,0 +1,191 @@
+openapi: 3.0.3
+info:
+  title: api_server_sample
+  version: 0.1.0
+  description: |
+    Thin Go HTTP service that proxies a subset of the GitHub repositories API,
+    gated by JWT auth. Obtain a token from `POST /login`, then pass it as
+    `Authorization: Bearer <token>` on every `/repos` request.
+servers:
+  - url: http://localhost:8080
+    description: Local dev
+security:
+  - bearerAuth: []
+paths:
+  /login:
+    post:
+      summary: Exchange credentials for a JWT
+      description: Returns a signed HS256 token valid for 1 hour. No auth required.
+      security: []
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Authentication succeeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '400':
+          $ref: '#/components/responses/PlainTextError'
+        '401':
+          $ref: '#/components/responses/PlainTextError'
+  /repos:
+    get:
+      summary: List repositories owned by the authenticated GitHub user
+      tags: [repos]
+      responses:
+        '200':
+          description: Array of repositories (may be empty)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Repo'
+        '401':
+          $ref: '#/components/responses/PlainTextError'
+        '502':
+          $ref: '#/components/responses/PlainTextError'
+    post:
+      summary: Create a new repository
+      tags: [repos]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateRepoRequest'
+      responses:
+        '201':
+          description: Repository created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Repo'
+        '400':
+          $ref: '#/components/responses/PlainTextError'
+        '401':
+          $ref: '#/components/responses/PlainTextError'
+        '502':
+          $ref: '#/components/responses/PlainTextError'
+  /repos/{name}:
+    parameters:
+      - $ref: '#/components/parameters/RepoName'
+    get:
+      summary: Get a single repository by name
+      tags: [repos]
+      responses:
+        '200':
+          description: Repository details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Repo'
+        '401':
+          $ref: '#/components/responses/PlainTextError'
+        '404':
+          $ref: '#/components/responses/PlainTextError'
+        '502':
+          $ref: '#/components/responses/PlainTextError'
+    patch:
+      summary: Update repository description or visibility
+      tags: [repos]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateRepoRequest'
+      responses:
+        '200':
+          description: Repository updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Repo'
+        '400':
+          $ref: '#/components/responses/PlainTextError'
+        '401':
+          $ref: '#/components/responses/PlainTextError'
+        '404':
+          $ref: '#/components/responses/PlainTextError'
+        '502':
+          $ref: '#/components/responses/PlainTextError'
+    delete:
+      summary: Delete a repository
+      tags: [repos]
+      responses:
+        '204':
+          description: Deleted, no body
+        '401':
+          $ref: '#/components/responses/PlainTextError'
+        '403':
+          $ref: '#/components/responses/PlainTextError'
+        '404':
+          $ref: '#/components/responses/PlainTextError'
+        '502':
+          $ref: '#/components/responses/PlainTextError'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    RepoName:
+      name: name
+      in: path
+      required: true
+      description: Repository name (not the full owner/name slug)
+      schema:
+        type: string
+  responses:
+    PlainTextError:
+      description: Error message as plain text (served via `http.Error`)
+      content:
+        text/plain:
+          schema:
+            type: string
+  schemas:
+    LoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username: { type: string }
+        password: { type: string, format: password }
+    LoginResponse:
+      type: object
+      required: [token]
+      properties:
+        token:
+          type: string
+          description: Signed HS256 JWT, 1-hour TTL
+    Repo:
+      type: object
+      properties:
+        name: { type: string }
+        full_name: { type: string }
+        description: { type: string }
+        html_url: { type: string, format: uri }
+        language: { type: string }
+        stargazers_count: { type: integer }
+        private: { type: boolean }
+    CreateRepoRequest:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        description: { type: string }
+        private: { type: boolean, default: false }
+    UpdateRepoRequest:
+      type: object
+      description: All fields optional; only provided fields are patched.
+      properties:
+        description: { type: string }
+        private: { type: boolean }
